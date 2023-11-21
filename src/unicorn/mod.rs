@@ -165,22 +165,15 @@ pub enum NodeType {
     Input2Byte,
     Input3Byte,
     Input4Byte,
-    Input5Byte,
-    Input6Byte,
-    Input7Byte,
 }
 
 pub fn get_nodetype(n: usize) -> NodeType {
     match n {
         1 => NodeType::Bit,
-        64 => NodeType::Word,
+        32 => NodeType::Word,
         8 => NodeType::Input1Byte,
         16 => NodeType::Input2Byte,
         24 => NodeType::Input3Byte,
-        32 => NodeType::Input4Byte,
-        40 => NodeType::Input5Byte,
-        48 => NodeType::Input6Byte,
-        56 => NodeType::Input7Byte,
         _ => {
             panic!("trying to get an unknown nodetype")
         }
@@ -218,19 +211,16 @@ where
         bytesize::ByteSize(model.stack_range.size_hint().0 as u64)
     )?;
     writeln!(out, "1 sort bitvec 1 ; Boolean")?;
-    writeln!(out, "2 sort bitvec 64 ; 64-bit machine word")?;
+    writeln!(out, "2 sort bitvec 32 ; 64-bit machine word")?;
     writeln!(out, "3 sort array 2 2 ; 64-bit virtual memory")?;
     writeln!(out, "11 sort bitvec 8 ; 1 byte")?;
     writeln!(out, "12 sort bitvec 16 ; 2 bytes")?;
     writeln!(out, "13 sort bitvec 24 ; 3 bytes")?;
     writeln!(out, "14 sort bitvec 32 ; 4 bytes")?;
-    writeln!(out, "15 sort bitvec 40 ; 5 bytes")?;
-    writeln!(out, "16 sort bitvec 48 ; 6 bytes")?;
-    writeln!(out, "17 sort bitvec 56 ; 7 bytes")?;
     for node in model.lines.iter() {
         match &*node.borrow() {
             Node::Const { nid, sort, imm } =>
-                writeln!(out, "{} constd {} {}", nid, get_sort(sort), imm)?,
+                writeln!(out, "{} constd {} {}", nid, get_sort(sort), *imm as u32)?,
             Node::Read { nid, memory, address } =>
                 writeln!(out, "{} read 2 {} {}", nid, get_nid(memory), get_nid(address))?,
             Node::Write { nid, memory, address, value } =>
@@ -254,7 +244,7 @@ where
             Node::Ult { nid, left, right } =>
                 writeln!(out, "{} ult 1 {} {}", nid, get_nid(left), get_nid(right))?,
             Node::Ext { nid, from, value } =>
-                writeln!(out, "{} uext 2 {} {}", nid, get_nid(value), 64 - from.bitsize())?,
+                writeln!(out, "{} uext 2 {} {}", nid, get_nid(value) as u32, 32 - from.bitsize() )?,//64 - from.bitsize())?,
             Node::Ite { nid, sort, cond, left, right } =>
                 writeln!(out, "{} ite {} {} {} {}", nid, get_sort(sort), get_nid(cond), get_nid(left), get_nid(right))?,
             Node::Eq { nid, left, right } =>
@@ -326,9 +316,6 @@ fn get_sort(sort: &NodeType) -> Nid {
         NodeType::Input2Byte => 12,
         NodeType::Input3Byte => 13,
         NodeType::Input4Byte => 14,
-        NodeType::Input5Byte => 15,
-        NodeType::Input6Byte => 16,
-        NodeType::Input7Byte => 17,
     }
 }
 
@@ -336,14 +323,10 @@ impl NodeType {
     fn bitsize(&self) -> usize {
         match *self {
             NodeType::Bit => 1,
-            NodeType::Word => 64,
+            NodeType::Word => 32,
             NodeType::Input1Byte => 8,
             NodeType::Input2Byte => 16,
             NodeType::Input3Byte => 24,
-            NodeType::Input4Byte => 32,
-            NodeType::Input5Byte => 40,
-            NodeType::Input6Byte => 48,
-            NodeType::Input7Byte => 56,
             _ => panic!("unknown bitsize"),
         }
     }

@@ -287,7 +287,7 @@ impl Giraphe {
     }
 
     pub(crate) fn evaluate(&mut self, nid: &Nid) -> Value {
-        let mut spot = self.node_lookup.get_mut(nid).unwrap();
+        let spot = self.node_lookup.get_mut(nid).unwrap();
         spot.old_value = spot.current_value.clone();
 
         if self.tick == spot.tick {
@@ -462,9 +462,6 @@ impl Giraphe {
                         NodeType::Input2Byte => 2,
                         NodeType::Input3Byte => 3,
                         NodeType::Input4Byte => 4,
-                        NodeType::Input5Byte => 5,
-                        NodeType::Input6Byte => 6,
-                        NodeType::Input7Byte => 7,
                     };
 
                     let mut nr: u64 = 0;
@@ -492,7 +489,7 @@ impl Giraphe {
             Node::Comment(_) => unreachable!(),
         };
 
-        let mut spot = self.node_lookup.get_mut(nid).unwrap();
+        let spot = self.node_lookup.get_mut(nid).unwrap();
         spot.current_value = new_value.clone();
         new_value
     }

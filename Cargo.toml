@@ -55,7 +55,7 @@ cadical-rs = { package = "cadical", version = "0.1.14", optional = true }
 [patch.crates-io]
 # TODO: Allows us to work on `riscu` and `unicorn` in parallel. Remove
 # once `riscu` stabilizes and we made another crates.io release of it.
-riscu = { git = 'https://github.com/cksystemsgroup/riscu' }
+riscu = { path = "/Users/patrickweber/CLionProjects/unicorn/riscu" }
 
 [dev-dependencies]
 rayon = "~1.7"

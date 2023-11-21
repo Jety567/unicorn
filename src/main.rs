@@ -29,7 +29,7 @@ use anyhow::{Context, Result};
 use bytesize::ByteSize;
 use cli::{collect_arg_values, expect_arg, expect_optional_arg, LogLevel, SatType, SmtType};
 use env_logger::{Env, TimestampPrecision};
-use riscu::load_object_file;
+use riscu::{load_object_file};
 use std::{
     env,
     fs::File,
@@ -168,6 +168,7 @@ fn main() -> Result<()> {
                 let extras = collect_arg_values(args, "extras");
                 let argv = [vec![arg0], extras].concat();
 
+                //let program = load_object_file(&input)?;
                 let program = load_object_file(&input)?;
                 let mut emulator = EmulatorState::new(memory_size as usize);
                 // TODO: Eventually patch original program first, then bootstrap.

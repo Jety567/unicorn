@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::mem::size_of;
 use std::ops::Range;
 use std::rc::Rc;
-use unicorn::engine::system::{prepare_unix_stack, SyscallId, NUMBER_OF_REGISTERS};
+use unicorn::engine::system::{SyscallId, NUMBER_OF_REGISTERS, prepare_unix_stack32bit};
 use unicorn::util::next_multiple_of;
 
 //
@@ -113,8 +113,8 @@ impl ModelBuilder {
             access_flow: dummy_node.clone(),
             ecall_flow: dummy_node,
             memory_size,
-            max_heap_size: max_heap as u64 * size_of::<u64>() as u64,
-            max_stack_size: max_stack as u64 * size_of::<u64>() as u64,
+            max_heap_size: (max_heap as u32 * size_of::<u32>() as u32) as u64,
+            max_stack_size: (max_stack as u32 * size_of::<u32>() as u32) as u64,
             data_range: 0..0,
             heap_range: 0..0,
             stack_range: 0..0,
@@ -188,6 +188,7 @@ impl ModelBuilder {
     }
 
     fn new_const(&mut self, imm: u64) -> NodeRef {
+        //println!("IMM {} nid {}",imm,self.current_nid);
         self.add_node(Node::Const {
             nid: self.current_nid,
             sort: NodeType::Word,
@@ -703,6 +704,7 @@ impl ModelBuilder {
     fn model_s(&mut self, bits: u32, address: NodeRef, value: NodeRef) {
         assert!(bits > 0 && bits < 64, "bit-width within range");
         let address_mask_node = self.new_const(!WORD_SIZE_MASK);
+        println!("Model s{:#?}",address);
         let address_word_node = self.new_and_word(address.clone(), address_mask_node);
         self.access_flow = self.new_ite(
             self.pc_flag(),
@@ -749,6 +751,7 @@ impl ModelBuilder {
 
     fn model_sd(&mut self, stype: SType) {
         let address_node = self.model_address(stype.rs1(), stype.imm() as u64);
+        println!("Model sd{:#?}",address_node);
         self.access_flow = self.new_ite(
             self.pc_flag(),
             address_node.clone(),
@@ -1187,8 +1190,8 @@ impl ModelBuilder {
     fn generate_model(&mut self, program: &Program, argv: &[String]) -> Result<()> {
         let data_section_start = program.data.address;
         let data_section_end = program.data.address + program.data.content.len() as u64;
-        let data_start = data_section_start & !(size_of::<u64>() as u64 - 1);
-        let data_end = next_multiple_of(data_section_end, size_of::<u64>() as u64);
+        let data_start = data_section_start & !(size_of::<u32>() as u64 - 1);
+        let data_end = next_multiple_of(data_section_end, size_of::<u32>() as u64);
         self.data_range = data_start..data_end;
         let heap_start = next_multiple_of(data_end, PAGE_SIZE);
         let heap_end = heap_start + self.max_heap_size;
@@ -1198,8 +1201,10 @@ impl ModelBuilder {
         self.stack_range = stack_start..stack_end;
 
         debug!("argc: {}, argv: {:?}", argv.len(), argv);
-        let initial_stack = prepare_unix_stack(argv, stack_end);
-        let initial_stack_size = initial_stack.len() * size_of::<u64>();
+        let initial_stack = prepare_unix_stack32bit(argv, stack_end as u32);
+        println!("SP Length: {}",initial_stack.len());
+        let initial_stack_size = initial_stack.len() * size_of::<u32>();
+        println!("Inital SP Value {}",initial_stack_size);
         let initial_sp_value = stack_end - initial_stack_size as u64;
         assert!(initial_sp_value >= stack_start, "initial stack fits");
 
@@ -1230,6 +1235,7 @@ impl ModelBuilder {
             sort: NodeType::Word,
             imm: self.data_range.start,
         });
+        println!("Data range start: {}",self.data_range.start);
         self.ecall_flow = self.zero_bit.clone();
 
         self.new_comment("kernel-mode flag".to_string());
@@ -1308,31 +1314,37 @@ impl ModelBuilder {
             debug!("Aligning data end: {:#010x}-{}", data_end, padding);
             dump_buffer.extend(vec![0; padding]);
         }
-        assert!(dump_buffer.len() % size_of::<u64>() == 0, "has been padded");
-        fn write_value_to_memory(this: &mut ModelBuilder, val: u64, adr: u64) {
+        //Changes here all u64 to u32
+        assert!(dump_buffer.len() % size_of::<u32>() == 0, "has been padded");
+
+
+        fn write_value_to_memory(this: &mut ModelBuilder, val: u32, adr: u64) {
+            println!("Addr {}",adr);
             let address = this.new_const(adr);
             let value = if val == 0 {
                 this.zero_word.clone()
             } else {
-                this.new_const(val)
+                this.new_const(val as u64)
             };
             this.memory_node = this.new_write(address, value);
         }
+
         dump_buffer
-            .chunks(size_of::<u64>())
-            .map(LittleEndian::read_u64)
-            .zip((data_start..data_end).step_by(size_of::<u64>()))
+            .chunks(size_of::<u32>())
+            .map(LittleEndian::read_u32)
+            .zip((data_start..data_end).step_by(size_of::<u32>()))
             .for_each(|(val, adr)| write_value_to_memory(self, val, adr));
         initial_stack
             .into_iter()
             .rev()
-            .zip((initial_sp_value..stack_end).step_by(size_of::<u64>()))
-            .for_each(|(val, adr)| write_value_to_memory(self, val, adr));
+            .zip((initial_sp_value..stack_end).step_by(size_of::<u32>()))
+            .for_each(|(val, adr)| write_value_to_memory(self, val as u32, adr));
         self.memory_node = self.new_state(
             Some(self.memory_node.clone()),
             "virtual-memory".to_string(),
             NodeType::Memory,
         );
+        //Until here
         self.memory_flow = self.memory_node.clone();
 
         self.new_comment("data flow".to_string());
@@ -1400,10 +1412,11 @@ impl ModelBuilder {
         let read_const_3 = self.new_const(3);
         let read_bytes_eq_3 = self.new_eq(read_bytes.clone(), read_const_3);
         let read_ite_3 = self.new_ite(read_bytes_eq_3, read_input3, read_ite_2, NodeType::Word);
-        let read_input4 = self.new_input("4-byte-input".to_string(), NodeType::Input4Byte);
+        let read_input4 = self.new_input("4-byte-input".to_string(), NodeType::Word);
         let read_const_4 = self.new_const(4);
         let read_bytes_eq_4 = self.new_eq(read_bytes.clone(), read_const_4);
         let read_ite_4 = self.new_ite(read_bytes_eq_4, read_input4, read_ite_3, NodeType::Word);
+        /*
         let read_input5 = self.new_input("5-byte-input".to_string(), NodeType::Input5Byte);
         let read_const_5 = self.new_const(5);
         let read_bytes_eq_5 = self.new_eq(read_bytes.clone(), read_const_5);
@@ -1420,8 +1433,9 @@ impl ModelBuilder {
         let read_const_8 = self.new_const(8);
         let read_bytes_eq_8 = self.new_eq(read_bytes.clone(), read_const_8);
         let read_ite_8 = self.new_ite(read_bytes_eq_8, read_input8, read_ite_7, NodeType::Word);
+         */
         let read_address = self.new_add(self.reg_node(Register::A1), self.reg_node(Register::A0));
-        let read_store = self.new_write(read_address, read_ite_8);
+        let read_store = self.new_write(read_address, read_ite_4);
         let read_more = self.new_ult(self.reg_node(Register::A0), self.reg_node(Register::A2));
         let read_more = self.new_and_bit(is_read.clone(), read_more);
         let read_not_done = self.new_and_bit(self.kernel_mode.clone(), read_more);

@@ -12,7 +12,6 @@ pub fn sample_quantum_annealer(path: &str, num_reads: u32, chain_strength: f32) 
         let app: Py<PyAny> = PyModule::from_code(py, py_dwave, "sample_qubo", "")?
             .getattr("sample_qubo")?
             .into();
-        println!("{:?}", app);
         let mut kwargs = HashMap::<&str, String>::new();
         kwargs.insert("path", path.to_string());
         kwargs.insert("num_reads", num_reads.to_string());

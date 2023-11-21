@@ -22,10 +22,7 @@ impl Spot {
                 | NodeType::Input1Byte
                 | NodeType::Input2Byte
                 | NodeType::Input3Byte
-                | NodeType::Input4Byte
-                | NodeType::Input5Byte
-                | NodeType::Input6Byte
-                | NodeType::Input7Byte => Value::Undefined,
+                | NodeType::Input4Byte => Value::Undefined,
                 NodeType::Memory => Value::Array(IndexMap::new()),
                 x => unreachable!("caused by {:?}", x),
             },
